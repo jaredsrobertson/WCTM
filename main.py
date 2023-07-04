@@ -1,6 +1,19 @@
+import discord
+from discord.ext import commands
+
 import constants
 import discobot
-import discomusic
+
+intents = discord.Intents.all()
+bot = commands.Bot(command_prefix='.',  intents=intents)
+bot.remove_command('help')
+
+cogs = ['cogs.mp3', 'cogs.discobot']
 
 if __name__ == '__main__':
-    discobot.client.run(constants.discord_token)
+    for cog in cogs:
+        bot.load_extension(cog)
+    discobot.bot.run(constants.discord_token)
+
+
+

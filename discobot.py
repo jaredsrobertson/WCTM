@@ -1,79 +1,115 @@
+import asyncio
 import random
 
 import discord
-import openai
-#from discord.ext import commands
-#from discord.ext.commands import Bot
+from discord.ext import commands
 
+import aichat
 import constants
 import rlrank
 import scrape
-import aichat
-
-openai.api_key = constants.openai_key
 
 intents = discord.Intents.all()
+intents.members = True
 intents.messages = True
 intents.message_content = True
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='.', intents=intents)
+bot.remove_command('help')
 
-steam_ids = {
-    "window.95#0": "76561198037294606",
-    "buckroe8208#8077": "76561198413196075",
-    "rocky#9467": "76561198114679719",
-    "RichardParker#2972": "76561198119027474"
-}
+class Music(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @commands.command()
+    async def join(self, ctx, *, channel: discord.VoiceChannel):
+
+        if ctx.voice_client is not None:
+            return await ctx.voice_client.move_to(channel)
+
+        await channel.connect()
+
+    @commands.command()
+    async def mj(self, ctx):
+
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio('mj/song.mp3'))
+        ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+
+        num = random.randint(1, 9)
+        await ctx.send("", file = discord.File(f"mj/{num}.gif"), delete_after=10)
+
+    @commands.command()
+    async def stop(self, ctx):
+ 
+        await ctx.voice_client.disconnect()
+
+    @mj.before_invoke
+    async def ensure_voice(self, ctx):
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
+            else:
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+        elif ctx.voice_client.is_playing():
+            ctx.voice_client.stop()
 
 
-@client.event
-async def on_ready():
-    print(f"{client.user} is ready!")
+class DBot(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
 
-@client.event
-async def on_message(message):
-    print("worked")
-    test = 0
-    query = message.content.lower()
 
-    if message.author == client.user:
-        return
+    @commands.command()
+    async def help(self, ctx):
+        await ctx.send(constants.help)
 
-    if message.content.lower() == "/roll":
+    @commands.command()
+    async def roll(self, ctx):
         num = random.randint(1, 6)
-        await message.channel.send(f"{message.author.mention} rolled...", file=discord.File(f"d{num}.png"))
-        test = 1
+        await ctx.send(f"{ctx.author.mention} rolled...", file=discord.File(f"dice/d{num}.png"), delete_after=150)
 
-    if message.content.lower() == "/rank":
-        heard = f"Let me check that for you, {message.author.mention}! Just a moment..."
-        await message.channel.send(heard)
-        rank = rlrank.scrape_rank(steam_ids[str(message.author)])
-        response = f"{message.author.mention}, your Rocket League 3v3 rank is \n\n{rank}"
+    @commands.command()
+    async def rank(self, ctx):
+        message = await ctx.send(f"Let me check that for you, {ctx.author.mention}! Just a moment...")
+        rank, rankimg = rlrank.scrape_rank(constants.steam_ids[str(ctx.author)])
+        #rankimg = imgrank.rank_check(rank)
+        await ctx.send(f"{ctx.author.mention}, your Rocket League 3v3 rank is \n\n{rank}", file=discord.File(f"rank/{rankimg}.png"), delete_after=150)
+        await message.delete()
 
-    if message.content.lower() == "/games":
-        heard = f"Let me check that for you, {message.author.mention}! Just a moment..."
-        await message.channel.send(heard)
-        steam_ids_list = steam_ids.values()
-        result = await scrape.get_owned_games(steam_ids_list)
+    @commands.command()
+    async def games(self, ctx):
+        message = await ctx.send(f"Let me check that for you, {ctx.author.mention}! Just a moment...")
+        result = await scrape.get_owned_games(constants.steam_ids.values())
         result_list = '\n'.join(result)
-        response = f"{message.author.mention}, the Whiff City boys share the following multiplayer Steam games: \n\n{result_list} "
+        await ctx.send(f"{ctx.author.mention}, the Whiff City boys share the following multiplayer Steam games: \n\n{result_list} ", delete_after=150)
+        await message.delete()
 
-    
-    if query[:4] == "/ai ":
-        content = f"{constants.content} {message.content[3:]}"
+    @commands.command()
+    async def ai(self, ctx, *, query):
+        content = f"{constants.content} {query}"
         response = aichat.ai_chat(content)
-        await message.channel.send(response)
-        test = 1
-        return test
-    
-    if query[:5] == "/img ":
-        content = f"{message.content[5:]}"
-        response = aichat.ai_img(content)
-        await message.channel.send(response)
-        test = 1
-        return test
-            
-      
-    if query[0] == "/" and test != 1:
-        await message.channel.send(response)
+        await ctx.send(response)
 
-client.run(constants.discord_token)
+    @commands.command()
+    async def img(self, ctx, *, query):
+        response = aichat.ai_img(query)
+        await ctx.send(response)
+
+    @commands.command()
+    async def secret(self, ctx):
+        await ctx.send('Message will be deleted in 5 seconds...', delete_after=5)
+        await asyncio.sleep(5)
+        await ctx.message.delete()
+
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+    print('------')
+
+async def main():
+    async with bot:
+        await bot.add_cog(Music(bot))
+        await bot.add_cog(DBot(bot))
+        await bot.start(constants.discord_token)
+
+asyncio.run(main())
