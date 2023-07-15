@@ -3,6 +3,8 @@ constants.py
 *.mp3
 *.exe
 *.txt
+*.gif
+*.jpg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
