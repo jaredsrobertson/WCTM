@@ -6,6 +6,7 @@ constants.py
 *.gif
 *.jpg
 *.json
+*.bkup
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
